@@ -254,17 +254,14 @@ function calculateStats(data) {
 }
 loadCsv();
 
-try {
-  ensureCsvExists();
-
-  fs.watchFile(csvPath, { interval: 1000 }, () => {
+setInterval(() => {
+  try {
     loadCsv();
     console.log(`CSV actualizado. Total: ${multipliers.length}`);
-  });
-} catch (e) {
-  console.log('watchFile disabled:', e);
-}
-
+  } catch (e) {
+    console.log('Reload CSV skipped');
+  }
+}, 5000);
 app.get('/multipliers', (req, res) => {
   loadCsv();
   res.json(multipliers);
