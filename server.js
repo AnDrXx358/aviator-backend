@@ -11,7 +11,10 @@ const io = new Server(server, {
   cors: { origin: "*" }
 });
 
-app.use(cors());
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "POST"]
+}));
 app.use(express.json());
 
 const csvPath = path.join(__dirname, 'aviator_data.csv');
