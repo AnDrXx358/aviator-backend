@@ -1,5 +1,3 @@
-throw new Error("TEST SERVER REAL");
-
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
@@ -8,19 +6,25 @@ const http = require('http');
 const { Server } = require('socket.io');
 
 const app = express();
+
 app.get('/', (req, res) => {
   res.send('AVIATOR BACKEND OK');
 });
 
 const server = http.createServer(app);
+
 const io = new Server(server, {
-  cors: { origin: "*" }
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
 });
 
 app.use(cors({
   origin: "*",
   methods: ["GET", "POST"]
 }));
+
 app.use(express.json());
 
 const csvPath = path.join(__dirname, 'aviator_data.csv');
@@ -29,7 +33,11 @@ let multipliers = [];
 
 function ensureCsvExists() {
   if (!fs.existsSync(csvPath)) {
-    fs.writeFileSync(csvPath, 'id;session;multiplier;ok1;ok2;extra\n', 'utf8');
+    fs.writeFileSync(
+      csvPath,
+      'id;session;multiplier;ok1;ok2;extra\n',
+      'utf8'
+    );
   }
 }
 
@@ -60,15 +68,18 @@ function appendValueToCsv(value) {
   ensureCsvExists();
 
   const raw = fs.readFileSync(csvPath, 'utf8');
+
   const lines = raw
     .split('\n')
     .map(line => line.trim())
     .filter(line => line.length > 0);
 
   const nextId = Math.max(0, lines.length - 1) + 1;
+
   const line = `${nextId};AUTO;${value};0;0;0\n`;
 
   fs.appendFileSync(csvPath, line, 'utf8');
+
   console.log('[CSV APPEND OK]', line.trim());
 }
 
@@ -126,6 +137,7 @@ function calculateStats(data) {
   const prob5x = (highCount / total) * 100;
 
   let lowStreak = 0;
+
   for (let i = data.length - 1; i >= 0; i--) {
     if (data[i] < 2) {
       lowStreak++;
@@ -135,30 +147,38 @@ function calculateStats(data) {
   }
 
   let phase = 'Ciclo normal';
-  if (highCount / total >= 0.18) phase = 'Fase explosiva';
-  else if (lowCount / total >= 0.65) phase = 'Fase fría';
+
+  if (highCount / total >= 0.18) {
+    phase = 'Fase explosiva';
+  } else if (lowCount / total >= 0.65) {
+    phase = 'Fase fría';
+  }
 
   let cycle = 'Ciclo neutro';
-  if (lowStreak >= 5) cycle = 'Pre-explosión';
-  else if (lowStreak >= 3) cycle = 'Atención';
-  else if (lowStreak <= 1) cycle = 'Caliente';
 
-  // últimos 20 para targets
+  if (lowStreak >= 5) {
+    cycle = 'Pre-explosión';
+  } else if (lowStreak >= 3) {
+    cycle = 'Atención';
+  } else if (lowStreak <= 1) {
+    cycle = 'Caliente';
+  }
+
   const good15 = last20.filter(v => v >= 1.5).length;
   const bad15 = last20.length - good15;
 
   const good20 = last20.filter(v => v >= 2.0).length;
   const bad20 = last20.length - good20;
 
-  // winrate / global %
-  const global15 = last20.length > 0 ? (good15 / last20.length) * 100 : 0;
-  const global20 = last20.length > 0 ? (good20 / last20.length) * 100 : 0;
+  const global15 =
+      last20.length > 0 ? (good15 / last20.length) * 100 : 0;
 
-  // confianza base
+  const global20 =
+      last20.length > 0 ? (good20 / last20.length) * 100 : 0;
+
   let conf15 = 50;
   let conf20 = 50;
 
-  // target 1.5
   conf15 += prob2x >= 50 ? 10 : 0;
   conf15 += lowStreak <= 1 ? 8 : 0;
   conf15 += lowCount / total <= 0.58 ? 7 : 0;
@@ -166,7 +186,6 @@ function calculateStats(data) {
   conf15 -= lowStreak >= 3 ? 10 : 0;
   conf15 -= lowCount / total >= 0.65 ? 8 : 0;
 
-  // target 2.0
   conf20 += prob2x >= 52 ? 8 : 0;
   conf20 += prob5x >= 18 ? 12 : 0;
   conf20 += highCount / total >= 0.18 ? 10 : 0;
@@ -177,25 +196,21 @@ function calculateStats(data) {
   conf15 = Math.max(0, Math.min(100, conf15));
   conf20 = Math.max(0, Math.min(100, conf20));
 
-  // stakes
   let stake15 = +(conf15 / 50).toFixed(2);
   let stake20 = +(conf20 / 50).toFixed(2);
 
   stake15 = Math.max(0, Math.min(2.0, stake15));
   stake20 = Math.max(0, Math.min(2.0, stake20));
 
-  // score
   const score15 = Math.round(conf15 * 1.5);
   const score20 = Math.round(conf20 * 1.3);
 
-  // señal / acción
   const signal15 = lowStreak >= 3 ? 'MALA' : 'BUENA';
   const signal20 = conf20 >= 55 ? 'BUENA' : 'MALA';
 
   const action15 = conf15 >= 55 ? 'ENTRAR' : 'ESPERAR';
   const action20 = conf20 >= 55 ? 'ENTRAR' : 'ESPERAR';
 
-  // recomendado
   let chosenTarget = 1.5;
   let chosenStake = stake15;
 
@@ -205,7 +220,6 @@ function calculateStats(data) {
   }
 
   if (conf15 < 45 && conf20 < 45) {
-    chosenTarget = 1.5;
     chosenStake = 0.0;
   }
 
@@ -218,12 +232,15 @@ function calculateStats(data) {
     sample: total,
     prob2x: +prob2x.toFixed(1),
     prob5x: +prob5x.toFixed(1),
+
     lowCount,
     midCount,
     highCount,
+
     lowPct: +((lowCount / total) * 100).toFixed(1),
     midPct: +((midCount / total) * 100).toFixed(1),
     highPct: +((highCount / total) * 100).toFixed(1),
+
     lowStreak,
     phase,
     cycle,
@@ -254,6 +271,7 @@ function calculateStats(data) {
     recommendedText,
   };
 }
+
 loadCsv();
 
 setInterval(() => {
@@ -264,21 +282,32 @@ setInterval(() => {
     console.log('Reload CSV skipped');
   }
 }, 5000);
+
 app.get('/multipliers', (req, res) => {
   loadCsv();
   res.json(multipliers);
 });
 
+app.get('/stats', (req, res) => {
+  loadCsv();
+  const stats = calculateStats(multipliers);
+  res.json(stats);
+});
+
 app.post('/add', (req, res) => {
   try {
     const { value } = req.body;
+
     const num = Number(value);
 
     if (Number.isNaN(num)) {
-      return res.status(400).json({ error: 'Valor inválido' });
+      return res.status(400).json({
+        error: 'Valor inválido'
+      });
     }
 
     appendValueToCsv(num);
+
     loadCsv();
 
     io.emit('new_multiplier', num);
@@ -294,8 +323,11 @@ app.post('/add', (req, res) => {
       added: num,
       total: multipliers.length,
     });
+
   } catch (error) {
+
     console.error('[ADD ERROR]', error);
+
     res.status(500).json({
       ok: false,
       error: 'No se pudo guardar el coeficiente',
@@ -304,6 +336,7 @@ app.post('/add', (req, res) => {
 });
 
 app.post('/save-round', (req, res) => {
+
   const round = {
     multiplier: req.body.multiplier,
     signal: req.body.signal,
@@ -326,25 +359,35 @@ app.post('/save-round', (req, res) => {
 
 app.post('/undo-last', (req, res) => {
   try {
+
     if (!fs.existsSync(csvPath)) {
-      return res.status(404).json({ error: 'CSV no existe' });
+      return res.status(404).json({
+        error: 'CSV no existe'
+      });
     }
 
     const raw = fs.readFileSync(csvPath, 'utf8');
+
     const lines = raw
       .split('\n')
       .map(line => line.trimEnd())
       .filter(line => line.length > 0);
 
     if (lines.length <= 1) {
-      return res.status(400).json({ error: 'No hay filas para borrar' });
+      return res.status(400).json({
+        error: 'No hay filas para borrar'
+      });
     }
 
     const removedLine = lines.pop();
 
-    fs.writeFileSync(csvPath, lines.join('\n') + '\n');
+    fs.writeFileSync(
+      csvPath,
+      lines.join('\n') + '\n'
+    );
 
     loadCsv();
+
     io.emit("csv_updated", multipliers);
 
     console.log('[UNDO OK]', removedLine);
@@ -354,16 +397,15 @@ app.post('/undo-last', (req, res) => {
       removed: removedLine,
       total: multipliers.length,
     });
-  } catch (e) {
-    console.error('[UNDO ERROR]', e);
-    res.status(500).json({ error: e.toString() });
-  }
-});
 
-app.get('/stats', (req, res) => {
-  loadCsv();
-  const stats = calculateStats(multipliers);
-  res.json(stats);
+  } catch (e) {
+
+    console.error('[UNDO ERROR]', e);
+
+    res.status(500).json({
+      error: e.toString()
+    });
+  }
 });
 
 const PORT = process.env.PORT || 3000;
