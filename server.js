@@ -283,9 +283,14 @@ setInterval(() => {
   }
 }, 5000);
 
-app.get('/multipliers', (req, res) => {
+app.get(['/multipliers', '/multipliers/'], (req, res) => {
   loadCsv();
-  res.json(multipliers);
+
+  res.json({
+    ok: true,
+    total: multipliers.length,
+    data: multipliers
+  });
 });
 
 app.get('/stats', (req, res) => {
