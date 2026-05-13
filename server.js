@@ -262,26 +262,6 @@ app.get('/multipliers', (req, res) => {
 });
 
 app.post('/add', (req, res) => {
-  app.post('/save-round', (req, res) => {
-  const round = {
-    multiplier: req.body.multiplier,
-    signal: req.body.signal,
-    target: req.body.target,
-    stake: req.body.stake,
-    result: req.body.result,
-    conf15: req.body.conf15,
-    conf20: req.body.conf20,
-    timestamp: Date.now()
-  };
-
-  if (!global.history) {
-    global.history = [];
-  }
-
-  global.history.push(round);
-
-  res.json({ ok: true });
-});
   try {
     const { value } = req.body;
     const num = Number(value);
@@ -313,6 +293,27 @@ app.post('/add', (req, res) => {
       error: 'No se pudo guardar el coeficiente',
     });
   }
+});
+
+app.post('/save-round', (req, res) => {
+  const round = {
+    multiplier: req.body.multiplier,
+    signal: req.body.signal,
+    target: req.body.target,
+    stake: req.body.stake,
+    result: req.body.result,
+    conf15: req.body.conf15,
+    conf20: req.body.conf20,
+    timestamp: Date.now()
+  };
+
+  if (!global.history) {
+    global.history = [];
+  }
+
+  global.history.push(round);
+
+  res.json({ ok: true });
 });
 
 app.post('/undo-last', (req, res) => {
