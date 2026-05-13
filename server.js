@@ -6,6 +6,9 @@ const http = require('http');
 const { Server } = require('socket.io');
 
 const app = express();
+app.get('/', (req, res) => {
+  res.send('AVIATOR BACKEND OK');
+});
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -251,10 +254,16 @@ function calculateStats(data) {
 }
 loadCsv();
 
-fs.watchFile(csvPath, { interval: 1000 }, () => {
-  loadCsv();
-  console.log(`CSV actualizado. Total: ${multipliers.length}`);
-});
+try {
+  ensureCsvExists();
+
+  fs.watchFile(csvPath, { interval: 1000 }, () => {
+    loadCsv();
+    console.log(`CSV actualizado. Total: ${multipliers.length}`);
+  });
+} catch (e) {
+  console.log('watchFile disabled:', e);
+}
 
 app.get('/multipliers', (req, res) => {
   loadCsv();
