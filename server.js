@@ -271,10 +271,33 @@ function calculateStats(data) {
     recommendedText,
   };
 }
-loadCsv();
+
+async function loadFromFirebase() {
+
+  try {
+
+    const snapshot = await db
+      .collection('vuelos')
+      .orderBy('timestamp')
+      .limit(500)
+      .get();
+
+    multipliers = snapshot.docs
+      .map(doc => doc.data().multiplier)
+      .filter(v => typeof v === 'number');
+
+    console.log('🔥 Firebase cargó', multipliers.length, 'vuelos');
+
+  } catch (e) {
+
+    console.error('LOAD FIREBASE ERROR:', e);
+
+  }
+}
+
+loadFromFirebase();
 
 app.get('/multipliers', (req, res) => {
-  loadCsv();
   res.json(multipliers);
 });
 
@@ -288,7 +311,7 @@ app.post('/add', (req, res) => {
     }
 
     appendValueToCsv(num);
-    loadCsv();
+    multipliers.push(num);
 
     io.emit('new_multiplier', num);
 
@@ -312,40 +335,54 @@ app.post('/add', (req, res) => {
   }
 });
 
-app.post('/undo-last', (req, res) => {
+app.post('/undo-last', async (req, res) => {
+
   try {
-    if (!fs.existsSync(csvPath)) {
-      return res.status(404).json({ error: 'CSV no existe' });
+
+    if (multipliers.length === 0) {
+      return res.status(400).json({
+        error: 'No hay vuelos para borrar'
+      });
     }
 
-    const raw = fs.readFileSync(csvPath, 'utf8');
-    const lines = raw
-      .split('\n')
-      .map(line => line.trimEnd())
-      .filter(line => line.length > 0);
+    // último multiplicador RAM
+    const removed = multipliers.pop();
 
-    if (lines.length <= 1) {
-      return res.status(400).json({ error: 'No hay filas para borrar' });
+    // buscar último doc firebase
+    const snapshot = await db
+      .collection('vuelos')
+      .orderBy('timestamp', 'desc')
+      .limit(1)
+      .get();
+
+    if (!snapshot.empty) {
+
+      const lastDoc = snapshot.docs[0];
+
+      await lastDoc.ref.delete();
+
     }
 
-    const removedLine = lines.pop();
+    io.emit('csv_updated', multipliers);
 
-    fs.writeFileSync(csvPath, lines.join('\n') + '\n');
-
-    loadCsv();
-    io.emit("csv_updated", multipliers);
-
-    console.log('[UNDO OK]', removedLine);
+    console.log('🔥 UNDO OK:', removed);
 
     res.json({
       ok: true,
-      removed: removedLine,
+      removed,
       total: multipliers.length,
     });
+
   } catch (e) {
+
     console.error('[UNDO ERROR]', e);
-    res.status(500).json({ error: e.toString() });
+
+    res.status(500).json({
+      error: e.toString(),
+    });
+
   }
+
 });
 
 app.post('/api/datos', async (req, res) => {
@@ -390,11 +427,10 @@ app.post('/api/datos', async (req, res) => {
 
     console.log('🔥 Guardado en Firebase:', multiplier);
 
-    // también guardar CSV
     appendValueToCsv(multiplier);
 
-    // recargar memoria
-    loadCsv();
+    // actualizar memoria RAM
+    multipliers.push(multiplier);
 
     // emitir socket
     io.emit('new_multiplier', multiplier);
@@ -415,7 +451,6 @@ app.post('/api/datos', async (req, res) => {
 });
 
 app.get('/stats', (req, res) => {
-  loadCsv();
   const stats = calculateStats(multipliers);
   res.json(stats);
 });
