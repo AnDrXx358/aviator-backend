@@ -6,7 +6,11 @@ const http = require('http');
 const { Server } = require('socket.io');
 const admin = require("firebase-admin");
 
-const serviceAccount = require("./firebase-key.json");
+const serviceAccount = {
+  projectId: process.env.FIREBASE_PROJECT_ID,
+  clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+  privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+};
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -19,9 +23,15 @@ app.get('/', (req, res) => {
   res.send('AVIATOR BACKEND OK');
 });
 
+
 const server = http.createServer(app);
+
 const io = new Server(server, {
-  cors: { origin: "*" }
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  },
+  transports: ['websocket', 'polling']
 });
 
 app.use(cors({
@@ -298,83 +308,6 @@ app.post('/add', (req, res) => {
     res.status(500).json({
       ok: false,
       error: 'No se pudo guardar el coeficiente',
-    });
-  }
-});
-
-app.post('/save-round', (req, res) => {
-  const round = {
-    multiplier: req.body.multiplier,
-    signal: req.body.signal,
-    target: req.body.target,
-    stake: req.body.stake,
-    result: req.body.result,
-    conf15: req.body.conf15,
-    conf20: req.body.conf20,
-    timestamp: Date.now()
-  };
-
-  if (!global.history) {
-    global.history = [];
-  }
-
-  global.history.push(round);
-
-  res.json({ ok: true });
-});
-
-app.post('/api/datos', async (req, res) => {
-  try {
-
-    const { multiplier, timestamp, source } = req.body;
-
-    if (
-      typeof multiplier !== 'number' ||
-      typeof timestamp !== 'number'
-    ) {
-      return res.status(400).json({
-        ok: false,
-        error: 'Formato inválido',
-      });
-    }
-
-    // 🔥 evitar duplicados
-    const existing = await db
-      .collection('vuelos')
-      .where('timestamp', '==', timestamp)
-      .limit(1)
-      .get();
-
-    if (!existing.empty) {
-      return res.json({
-        ok: true,
-        duplicated: true,
-      });
-    }
-
-    await db.collection('vuelos').add({
-      multiplier,
-      timestamp,
-      source: source || 'robot',
-      fecha: new Date(timestamp).toISOString(),
-    });
-
-    // 🔥 realtime socket
-    io.emit('new_multiplier', multiplier);
-
-    console.log('🔥 Vuelo guardado:', multiplier);
-
-    res.json({
-      ok: true,
-    });
-
-  } catch (e) {
-
-    console.error('API DATOS ERROR:', e);
-
-    res.status(500).json({
-      ok: false,
-      error: e.toString(),
     });
   }
 });
