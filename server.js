@@ -20,7 +20,11 @@ const db = admin.firestore();
 
 const app = express();
 app.get('/', (req, res) => {
-  res.send('AVIATOR BACKEND OK');
+  res.json({
+  ok: true,
+  backend: 'AVIATOR ONLINE',
+  flights: multipliers.length,
+});
 });
 
 
@@ -278,13 +282,14 @@ async function loadFromFirebase() {
 
     const snapshot = await db
       .collection('vuelos')
-      .orderBy('timestamp')
-      .limit(500)
+      .orderBy('timestamp', 'desc')
+      .limit(1000)
       .get();
 
-    multipliers = snapshot.docs
-      .map(doc => doc.data().multiplier)
-      .filter(v => typeof v === 'number');
+  multipliers = snapshot.docs
+    .map(doc => doc.data().multiplier)
+    .filter(v => typeof v === 'number')
+    .reverse();
 
     console.log('🔥 Firebase cargó', multipliers.length, 'vuelos');
 
@@ -431,6 +436,9 @@ app.post('/api/datos', async (req, res) => {
 
     // actualizar memoria RAM
     multipliers.push(multiplier);
+    if (multipliers.length > 1000) {
+      multipliers.shift();
+    }
 
     // emitir socket
     io.emit('new_multiplier', multiplier);
