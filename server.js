@@ -4,6 +4,15 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const { Server } = require('socket.io');
+const admin = require("firebase-admin");
+
+const serviceAccount = require("./firebase-key.json");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
+
+const db = admin.firestore();
 
 const app = express();
 app.get('/', (req, res) => {
@@ -254,15 +263,6 @@ function calculateStats(data) {
 }
 loadCsv();
 
-setInterval(() => {
-  try {
-    loadCsv();
-    console.log(`CSV actualizado. Total: ${multipliers.length}`);
-  } catch (e) {
-    console.log('Reload CSV skipped');
-  }
-}, 5000);
-
 app.get('/multipliers', (req, res) => {
   loadCsv();
   res.json(multipliers);
@@ -323,6 +323,62 @@ app.post('/save-round', (req, res) => {
   res.json({ ok: true });
 });
 
+app.post('/api/datos', async (req, res) => {
+  try {
+
+    const { multiplier, timestamp, source } = req.body;
+
+    if (
+      typeof multiplier !== 'number' ||
+      typeof timestamp !== 'number'
+    ) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Formato inválido',
+      });
+    }
+
+    // 🔥 evitar duplicados
+    const existing = await db
+      .collection('vuelos')
+      .where('timestamp', '==', timestamp)
+      .limit(1)
+      .get();
+
+    if (!existing.empty) {
+      return res.json({
+        ok: true,
+        duplicated: true,
+      });
+    }
+
+    await db.collection('vuelos').add({
+      multiplier,
+      timestamp,
+      source: source || 'robot',
+      fecha: new Date(timestamp).toISOString(),
+    });
+
+    // 🔥 realtime socket
+    io.emit('new_multiplier', multiplier);
+
+    console.log('🔥 Vuelo guardado:', multiplier);
+
+    res.json({
+      ok: true,
+    });
+
+  } catch (e) {
+
+    console.error('API DATOS ERROR:', e);
+
+    res.status(500).json({
+      ok: false,
+      error: e.toString(),
+    });
+  }
+});
+
 app.post('/undo-last', (req, res) => {
   try {
     if (!fs.existsSync(csvPath)) {
@@ -356,6 +412,72 @@ app.post('/undo-last', (req, res) => {
   } catch (e) {
     console.error('[UNDO ERROR]', e);
     res.status(500).json({ error: e.toString() });
+  }
+});
+
+app.post('/api/datos', async (req, res) => {
+  try {
+    const { multiplier, timestamp, source } = req.body;
+
+    // validar
+    if (
+      typeof multiplier !== 'number' ||
+      typeof timestamp !== 'number'
+    ) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Formato inválido',
+      });
+    }
+
+    // evitar duplicados
+    const docRef = db
+      .collection('vuelos')
+      .doc(timestamp.toString());
+
+    const existing = await docRef.get();
+
+    if (existing.exists) {
+      return res.json({
+        ok: true,
+        duplicate: true,
+      });
+    }
+
+    // data
+    const data = {
+      multiplier,
+      timestamp,
+      fecha: new Date(timestamp).toISOString(),
+      source: source || 'desconocido',
+    };
+
+    // guardar en firebase
+    await docRef.set(data);
+
+    console.log('🔥 Guardado en Firebase:', multiplier);
+
+    // también guardar CSV
+    appendValueToCsv(multiplier);
+
+    // recargar memoria
+    loadCsv();
+
+    // emitir socket
+    io.emit('new_multiplier', multiplier);
+
+    res.json({
+      ok: true,
+      saved: data,
+    });
+
+  } catch (e) {
+    console.error('[FIREBASE ERROR]', e);
+
+    res.status(500).json({
+      ok: false,
+      error: e.toString(),
+    });
   }
 });
 
