@@ -47,6 +47,7 @@ app.use(express.json());
 const csvPath = path.join(__dirname, 'aviator_data.csv');
 
 let multipliers = [];
+const recentTimestamps = new Set();
 
 function ensureCsvExists() {
   if (!fs.existsSync(csvPath)) {
@@ -393,6 +394,14 @@ app.post('/undo-last', async (req, res) => {
 app.post('/api/datos', async (req, res) => {
   try {
     const { multiplier, timestamp, source } = req.body;
+    if (recentTimestamps.has(timestamp)) {
+
+      return res.json({
+        ok: true,
+        duplicateRAM: true,
+      });
+
+    }
 
     // validar
     if (
@@ -429,6 +438,16 @@ app.post('/api/datos', async (req, res) => {
 
     // guardar en firebase
     await docRef.set(data);
+    recentTimestamps.add(timestamp);
+
+    if (recentTimestamps.size > 2000) {
+
+      const firstKey =
+        recentTimestamps.values().next().value;
+
+      recentTimestamps.delete(firstKey);
+
+    }
 
     console.log('🔥 Guardado en Firebase:', multiplier);
 
