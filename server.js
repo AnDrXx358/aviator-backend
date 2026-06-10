@@ -33,9 +33,17 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: "*",
-    methods: ["GET", "POST"]
+    methods: ["GET", "POST"],
   },
-  transports: ['websocket', 'polling']
+
+  transports: ['websocket', 'polling'],
+
+  pingTimeout: 60000,
+  pingInterval: 25000,
+
+  connectTimeout: 60000,
+
+  allowEIO3: true,
 });
 
 app.use(cors({
@@ -309,6 +317,7 @@ app.get('/multipliers', (req, res) => {
 
 app.post('/add', (req, res) => {
   try {
+
     const { value } = req.body;
     const num = Number(value);
 
@@ -316,10 +325,10 @@ app.post('/add', (req, res) => {
       return res.status(400).json({ error: 'Valor inválido' });
     }
 
-    appendValueToCsv(num);
-    multipliers.push(num);
+    //appendValueToCsv(num);
+    //multipliers.push(num);
 
-    io.emit('new_multiplier', num);
+    //io.emit('new_multiplier', num);
 
     console.log('[ADD OK]', {
       added: num,
@@ -451,7 +460,7 @@ app.post('/api/datos', async (req, res) => {
 
     console.log('🔥 Guardado en Firebase:', multiplier);
 
-    appendValueToCsv(multiplier);
+    //appendValueToCsv(multiplier);
 
     // actualizar memoria RAM
     multipliers.push(multiplier);
