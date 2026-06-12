@@ -401,18 +401,11 @@ app.post('/undo-last', async (req, res) => {
 });
 
 app.post('/api/datos', async (req, res) => {
+
+  const { multiplier, timestamp, source } = req.body;
+
   try {
-    const { multiplier, timestamp, source } = req.body;
-    if (recentTimestamps.has(timestamp)) {
 
-      return res.json({
-        ok: true,
-        duplicateRAM: true,
-      });
-
-    }
-
-    // validar
     if (
       typeof multiplier !== 'number' ||
       typeof timestamp !== 'number'
@@ -423,72 +416,145 @@ app.post('/api/datos', async (req, res) => {
       });
     }
 
-    // evitar duplicados
-    const docRef = db
-      .collection('vuelos')
-      .doc(timestamp.toString());
-
-    const existing = await docRef.get();
-
-    if (existing.exists) {
+    if (recentTimestamps.has(timestamp)) {
       return res.json({
         ok: true,
-        duplicate: true,
+        duplicateRAM: true,
       });
     }
 
-    // data
-    const data = {
-      multiplier,
-      timestamp,
-      fecha: new Date(timestamp).toISOString(),
-      source: source || 'desconocido',
-    };
-
-    // guardar en firebase
-    await docRef.set(data);
     recentTimestamps.add(timestamp);
 
     if (recentTimestamps.size > 2000) {
-
       const firstKey =
         recentTimestamps.values().next().value;
 
       recentTimestamps.delete(firstKey);
-
     }
 
-    console.log('🔥 Guardado en Firebase:', multiplier);
-
-    //appendValueToCsv(multiplier);
-
-    // actualizar memoria RAM
     multipliers.push(multiplier);
+
     if (multipliers.length > 1000) {
       multipliers.shift();
     }
 
-    // emitir socket
     io.emit('new_multiplier', multiplier);
 
     res.json({
       ok: true,
-      saved: data,
+      accepted: true,
+    });
+
+    setImmediate(async () => {
+
+      try {
+
+        await db
+          .collection('vuelos')
+          .doc(timestamp.toString())
+          .set({
+            multiplier,
+            timestamp,
+            fecha: new Date(timestamp).toISOString(),
+            source: source || 'desconocido',
+          });
+
+        console.log(
+          '🔥 Firebase OK:',
+          multiplier
+        );
+
+      } catch (e) {
+
+        console.error(
+          '❌ FIREBASE ERROR:',
+          e
+        );
+
+      }
+
     });
 
   } catch (e) {
-    console.error('[FIREBASE ERROR]', e);
 
-    res.status(500).json({
-      ok: false,
-      error: e.toString(),
-    });
+    console.error(
+      '[API DATOS ERROR]',
+      e
+    );
+
+    if (!res.headersSent) {
+      res.status(500).json({
+        ok: false,
+        error: e.toString(),
+      });
+    }
+
   }
+
 });
 
 app.get('/stats', (req, res) => {
   const stats = calculateStats(multipliers);
   res.json(stats);
+});
+
+app.post('/save-round', (req, res) => {
+
+  console.log("🔥 SAVE ROUND HIT");
+  console.log(req.body);
+
+  try {
+
+    const round = req.body;
+
+    const reportesDiaPath = path.join(
+      __dirname,
+      'reportes-dia.json'
+    );
+
+    let rounds = [];
+
+    if (fs.existsSync(reportesDiaPath)) {
+
+      rounds = JSON.parse(
+        fs.readFileSync(
+          reportesDiaPath,
+          'utf8'
+        )
+      );
+
+    }
+
+    rounds.push(round);
+
+    fs.writeFileSync(
+      reportesDiaPath,
+      JSON.stringify(
+        rounds,
+        null,
+        2
+      )
+    );
+
+    res.json({
+      ok: true,
+      totalRounds: rounds.length
+    });
+
+  } catch (e) {
+
+    console.error(
+      'SAVE ROUND ERROR:',
+      e
+    );
+
+    res.status(500).json({
+      ok: false,
+      error: e.toString()
+    });
+
+  }
+
 });
 
 const PORT = process.env.PORT || 3000;
