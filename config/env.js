@@ -26,6 +26,7 @@ if (missingVariables.length > 0) {
 const env = Object.freeze({
   nodeEnv: process.env.NODE_ENV || 'development',
   port: Number(process.env.PORT || 3000),
+  allowedOrigin: process.env.ALLOWED_ORIGIN || '*',
 
   firebase: Object.freeze({
     projectId: process.env.FIREBASE_PROJECT_ID,

@@ -23,7 +23,7 @@ async function startServer() {
   initializeSocketServer(httpServer);
 
   app.use(cors({
-    origin: '*',
+    origin: env.allowedOrigin,
     methods: ['GET', 'POST'],
   }));
 

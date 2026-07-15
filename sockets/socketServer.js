@@ -1,4 +1,6 @@
+
 const { Server } = require('socket.io');
+const env = require('../config/env');
 
 let io = null;
 
@@ -9,7 +11,7 @@ function initializeSocketServer(httpServer) {
 
   io = new Server(httpServer, {
     cors: {
-      origin: '*',
+      origin: env.allowedOrigin,
       methods: ['GET', 'POST'],
     },
     transports: ['websocket', 'polling'],
