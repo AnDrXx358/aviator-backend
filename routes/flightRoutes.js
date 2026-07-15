@@ -42,30 +42,4 @@ router.post('/api/datos', async (req, res) => {
   }
 });
 
-router.post('/undo-last', async (req, res) => {
-  try {
-    const deletedFlight = await flightService.removeLatestFlight();
-
-    if (!deletedFlight) {
-      return res.status(400).json({
-        ok: false,
-        error: 'No hay vuelos para borrar.',
-      });
-    }
-
-    return res.json({
-      ok: true,
-      removed: deletedFlight.multiplier,
-      total: flightStore.getFlightCount(),
-    });
-  } catch (error) {
-    console.error('[UNDO FLIGHT ERROR]', error);
-
-    return res.status(500).json({
-      ok: false,
-      error: 'No se pudo eliminar el último vuelo.',
-    });
-  }
-});
-
 module.exports = router;

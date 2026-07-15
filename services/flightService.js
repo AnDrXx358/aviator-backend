@@ -70,22 +70,7 @@ return {
 };
 }
 
-async function removeLatestFlight() {
-  const deletedFlight = await flightRepository.deleteLatestFlight();
-
-  if (!deletedFlight) {
-    return null;
-  }
-
-  flightStore.removeLastFlight();
-
-  emitFlightsUpdated(flightStore.getFlights());
-
-  return deletedFlight;
-}
-
 module.exports = {
   loadInitialFlights,
   registerFlight,
-  removeLatestFlight,
 };
