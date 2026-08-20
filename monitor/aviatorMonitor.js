@@ -4,6 +4,10 @@ const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 puppeteer.use(StealthPlugin());
 
+const ProxyChain = require('proxy-chain');
+
+const env = require('../config/env');
+
 const {
     sendTelegramMessage,
 } = require('../telegram/telegramService');
@@ -49,6 +53,7 @@ async function enviarTelegram(texto) {
 class ZoraidaMonitor {
     constructor() {
         this.browser = null;
+        this.proxyServer = null;
         this.page = null;
         this.gameFrame = null;
 
@@ -105,7 +110,14 @@ class ZoraidaMonitor {
             } catch (_) {}
         }
 
+        if (this.proxyServer) {
+            try {
+                await this.proxyServer.close(true);
+            } catch (_) {}
+        }
+
         this.browser = null;
+        this.proxyServer = null;
         this.page = null;
     }
 
@@ -184,15 +196,48 @@ class ZoraidaMonitor {
     }
 
     async crearNavegador() {
+        const upstreamProxyUrl =
+            `http://${env.proxy.username}:${env.proxy.password}@${env.proxy.host}:${env.proxy.port}`;
+
+        const proxyServer = new ProxyChain.Server({
+            port: 0,
+            host: '127.0.0.1',
+            verbose: false,
+
+            prepareRequestFunction: () => ({
+                upstreamProxyUrl,
+            }),
+        });
+
+        proxyServer.on('tunnelConnectFailed', ({ response }) => {
+            log(
+                `❌ CONNECT upstream falló: ${response.statusCode} ${response.statusMessage || ''}`
+            );
+        });
+
+        proxyServer.on('requestFailed', ({ request, error }) => {
+            log(`❌ Proxy request falló: ${request.url}`);
+            log(`❌ Proxy error: ${error.message}`);
+        });
+
+        await proxyServer.listen();
+
+        this.proxyServer = proxyServer;
+
+        const localProxyUrl = `http://127.0.0.1:${proxyServer.port}`;
+
+        log(`🌐 Proxy relay local iniciado: ${localProxyUrl}`);
+
         const browser = await puppeteer.launch({
-            headless: false,
+            headless: true,
             defaultViewport: null,
             userDataDir: CONFIG.USER_DATA_DIR,
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--disable-blink-features=AutomationControlled',
-                '--window-size=1920,1080'
+                '--window-size=1920,1080',
+                `--proxy-server=${localProxyUrl}`,
             ]
         });
 

@@ -38,6 +38,14 @@ const env = Object.freeze({
     botToken: process.env.TELEGRAM_BOT_TOKEN,
     chatId: process.env.TELEGRAM_CHAT_ID,
   }),
+
+  proxy: Object.freeze({
+    host: process.env.PROXY_HOST,
+    port: process.env.PROXY_PORT,
+    username: process.env.PROXY_USERNAME,
+    password: process.env.PROXY_PASSWORD,
+  }),
+
 });
 
 module.exports = env;
